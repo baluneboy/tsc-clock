@@ -4,24 +4,29 @@
 
 # 8/20/2015 Hrovat modified to allow for input arguments
 # 9/1/2015  Hrovat modified for white bg when yoda db problem
-# 4/27/2018 Hrovat modified for new colors when MSFC telemetry went wonky
+# 4/30/2018 Hrovat modified to get rid of global
 
 import os
 import sys
 import time
 import datetime
+import numpy as np
 import ConfigParser
 from Tkinter import *
 from multiprocessing import Queue
 
-from pims.largeclock.db import query_aos
+from db import query_aos
+from fifo import TimeCheckableFifo
+
 #from pims.largeclock.timeout import run_with_timeout
 
 _PWORD = raw_input('samsops pword: ') # USE TEMPORARY HARD-CODED FOR PY2EXE
 
+        
 # get path to this script; used to find largeclock.cfg (config) file
 def get_script_path():
     return os.path.dirname(os.path.realpath(sys.argv[0]))
+
 
 # if no input args, then we try to read cfg file (fallback to hard-coded values)
 def get_config():
@@ -56,6 +61,7 @@ def get_config():
    
     return font_size, w, h, _default, _custom
 
+
 # get query results for Ku AOS/LOS with timeout
 def get_aos_query_results_with_timeout(_PWORD):
     timeout_sec = 3
@@ -69,38 +75,59 @@ def get_aos_query_results_with_timeout(_PWORD):
         else:
             return out_q.get()
     else:
-        return None, None # hit the timeout
+        return None, None  # hit the timeout
 
-# update every 200 msec
-def tick():
-    global time1, dt1
+
+# update every wait_ms (msec)
+def tick(buff, wait_ms):
+
+    # get array of deltas from FIFO buffer
+    # for t in buff: print t
+    deltas = buff.get_deltas()
+    
+    # compute sum of deltas (from FIFO buffer) to assess AOS/LOS
+    sum_deltas = np.sum(buff.get_deltas())
+    # print sum_deltas
+    # print '-' * 22
+
+    time1 = buff[-1].strftime('%j  %H:%M:%S')
+
     # get the current local time from local machine
-    tnow = time
-    time2 = tnow.strftime('%j  %H:%M:%S')
+    time2 = datetime.datetime.now().strftime('%j  %H:%M:%S')
+
     # if time string has changed, update it
     # with label update once per second
     if time2 != time1:
         time1 = time2
         clock.config(text=time2)
 
-        # every 5 seconds check if we are AOS/LOS and
+        ku_timestamp, ku_aos_los = query_aos(_PWORD)
+        buff.append(ku_timestamp)
+
+        # every odd # seconds (every other second), check if AOS/LOS and
         # update color & title text
-        if time2[-1:] in ['0', '5']:
-            ku_timestamp, ku_aos_los = query_aos(_PWORD)
-            #ku_timestamp, ku_aos_los = get_aos_query_results_with_timeout(_PWORD)
+        if int(time2[-1:]) % 2:
+                
             if ku_timestamp:
                 ku_time = ku_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-                if ku_aos_los:
+                # if ku_aos_los:
+                #     clock.config(bg='green')
+                # else:
+                #     clock.config(bg='yellow')
+                if sum_deltas == 0:
+                    clock.config(bg='yellow')
+                elif sum_deltas < 3:
                     clock.config(bg='green')
                 else:
-                    clock.config(bg='yellow')
+                    clock.config(bg='pale green')
             else:
                 ku_time = "yoda db connection error"
                 clock.config(bg='white')
             root.title( 'ku_timestamp = %s' %  ku_time)
 
     # now call tick every 200 milliseconds to update display
-    clock.after(200, tick)
+    clock.after(wait_ms, tick, buff, wait_ms)
+
 
 # menu callback for copying time to clipboard
 def menu_callback(fmt):
@@ -109,8 +136,9 @@ def menu_callback(fmt):
     r.clipboard_clear()
     r.clipboard_append(datetime.datetime.now().strftime(fmt))
     r.destroy()
-    
-if __name__ == "__main__":
+
+
+if __name__ == "__main__":   
     
     # get font size, window width, and window height
     font_size, w, h, _default, _custom = get_config()
@@ -137,12 +165,18 @@ if __name__ == "__main__":
         menu.post(event.x_root, event.y_root)    
     
     # initialize time, color, and clock label before main loop
-    time1 = ''
+    time1 = datetime.datetime(1970, 1, 1)
     clock = Label(root, font=('arial', font_size, 'bold'), bg='white')
     clock.pack(fill=BOTH, expand=1)
     clock.bind("<Button-3>", popup)
+
+    # NOTE: do not make fifo_len too short (keep it greater than 5 for msec_wait = 200)
     
     # get time now, do first tick, and start main loop
-    dt1 = datetime.datetime.now()   
-    tick()
+    msec_wait = 200  # how long to wait (msec) between calls to main "tick" update routine
+    fifo_len_sec = 1.2  # length of fifo buffer used to gauge AOS/LOS
+    fifo_len = int(np.ceil(1000.0 * fifo_len_sec / msec_wait))  # length of fifo buffer
+    print 'fifo_len =', fifo_len
+    fifo = TimeCheckableFifo([time1] * fifo_len, fifo_len)
+    tick(fifo, msec_wait)
     root.mainloop()
