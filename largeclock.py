@@ -5,12 +5,14 @@
 # 8/20/2015 Hrovat modified to allow for input arguments
 # 9/1/2015  Hrovat modified for white bg when yoda db problem
 # 4/30/2018 Hrovat modified to get rid of global
+# 5/3/2018  Hrovat revised to get rid of numpy (because py2exe issue on trek) and incorporate new LOS indicator strategy
 
 import os
 import sys
 import time
+import math
 import datetime
-import numpy as np
+#import numpy as np
 import ConfigParser
 from Tkinter import *
 from multiprocessing import Queue
@@ -86,7 +88,8 @@ def tick(buff, wait_ms):
     deltas = buff.get_deltas()
     
     # compute sum of deltas (from FIFO buffer) to assess AOS/LOS
-    sum_deltas = np.sum(buff.get_deltas())
+    #sum_deltas = np.sum(buff.get_deltas())
+    sum_deltas = sum(buff.get_deltas())
     # print sum_deltas
     # print '-' * 22
 
@@ -175,7 +178,8 @@ if __name__ == "__main__":
     # get time now, do first tick, and start main loop
     msec_wait = 200  # how long to wait (msec) between calls to main "tick" update routine
     fifo_len_sec = 1.2  # length of fifo buffer used to gauge AOS/LOS
-    fifo_len = int(np.ceil(1000.0 * fifo_len_sec / msec_wait))  # length of fifo buffer
+    #fifo_len = int(np.ceil(1000.0 * fifo_len_sec / msec_wait))  # length of fifo buffer
+    fifo_len = int(math.ceil(1000.0 * fifo_len_sec / msec_wait))  # length of fifo buffer
     print 'fifo_len =', fifo_len
     fifo = TimeCheckableFifo([time1] * fifo_len, fifo_len)
     tick(fifo, msec_wait)
