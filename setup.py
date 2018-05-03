@@ -1,7 +1,7 @@
 from distutils.core import setup
 import py2exe, sys, os
 
-# In this dir "C:\Python27\pims\largeclock"
+# In this dir "C:\Python27\pims\tsc-clock"
 # RUN c:\Python27\python.exe setup.py
 # to get dist directory that has your exe
 
