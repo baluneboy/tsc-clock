@@ -107,10 +107,10 @@ def tick(buff, wait_ms):
         ku_timestamp, ku_aos_los = query_aos(_PWORD)
         buff.append(ku_timestamp)
 
-        # every odd # seconds (every other second), check if AOS/LOS and
+        # every even # second (every other second), check if AOS/LOS and
         # update color & title text
-        if int(time2[-1:]) % 2:
-                
+        last_digit = int(time2[-1:])
+        if last_digit % 2 == 1:
             if ku_timestamp:
                 ku_time = ku_timestamp.strftime('%Y-%m-%d %H:%M:%S')
                 # if ku_aos_los:
@@ -126,7 +126,8 @@ def tick(buff, wait_ms):
             else:
                 ku_time = "yoda db connection error"
                 clock.config(bg='white')
-            root.title( 'ku_timestamp = %s' %  ku_time)
+            if ku_time[-1] in ['0', '5']:
+                root.title( 'ku_timestamp = %s' %  ku_time)
 
     # now call tick every 200 milliseconds to update display
     clock.after(wait_ms, tick, buff, wait_ms)
